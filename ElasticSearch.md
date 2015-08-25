@@ -102,7 +102,7 @@ inspect the response, a 200 only means that a single operation of the bulk succe
 
 test bulk sizes and responses on hardware and test bulks multithreaded, 100Mb is the max size by default
 
-### API Exercise
+### API Lab
 
 ```json
 GET _search
@@ -211,6 +211,8 @@ ICU analysis plugin
 - kstem
 
 **Hunspell**: Dictionary based stemming filters; Mozilla / Open Office have well maintained ones
+
+### Lab
 
 ```json
 POST _analyze?analyzer=english&filters=lowercase&text=it is unlikely that I\’m especially good at analysis yet.
@@ -331,6 +333,8 @@ This is a template for creating multiple indexes
 The created template is a deep copy, will not relate back to the template after creation
 
 **order**: the order of which the operations are applied, 0 is run first then in ascending order
+
+### Lab
 
 ```json
 POST _analyze?analyzer=english&filters=lowercase&text=it is unlikely that I\’m especially good at analysis yet.
@@ -564,11 +568,13 @@ compound filters are not cached, however their pieces are cached
 **Highlighting**: showing the snippets of text that match the search
 
 Types of highlighters:
-- highlighter: requires re-analysis of the text
+- Highlighter: requires re-analysis of the text
 - FVH Fast Vector Highlighter: uses term vectors; doesn't need to reanalyze text before rendering; not necessairily faster than highlighter, depends on data
 - Postings: requires _**index_option**_ be set to offset; sentence based
 
 Highlighter type is automatically chosen based on mappings
+
+### Lab
 
 ```json
 GET /stack/question/_search
@@ -606,5 +612,206 @@ GET /stack/question/_search
   }
 }
 ```
+## Relevancy
 
-## Suggest
+word matches get lumped into a relevancy vector
+
+### TF-IDF
+
+Term Frequency - inverse document frequency
+
+- The more the term occurs in the document, the weighting is increased
+- The more the term occurs in the document collection, weighting is decreased
+
+**explain=true**: will output weighting for results in search
+
+### Influencing Relevancy
+
+**Boost**: make a query clause more important than another; boost is a relative importance to other clauses and boost values; is normalized in results.
+
+boost can work on indicies as well, allows to boost fo more relevant recent data:
+
+```json
+{
+    "indices_boost": {
+        “data_2015_07": 2,
+        “data_2015_08": 4
+    },
+    "query": {
+        "match": {
+            "text": “some terms to search on"
+        }
+    }
+}
+```
+**Boost_factor**: multiplicative increase in importance; not normalized, not relative
+
+### Decay Function
+
+Great for reducing relevancy based on range; date ranges and geo-location (seems really important to TrueCar algorithm) are good examples
+
+### Script Scoring
+
+...
+
+### Field Value Factor
+
+Replace the field relevancy value with a custom algorithm
+
+'boost_mode: replace'
+
+### Lab
+```json
+GET /stack/question/_search
+{
+  "explain": true, 
+  "query": {
+    "bool": {
+      "should": [
+        {"match": {
+          "title": {
+            "query": "Maven",
+            "boost": 2
+          }
+        }},
+        {"function_score": {
+          "query": {
+            "match": {
+              "body": {
+                "query": "C++"
+              }
+            }
+          },
+          "functions": [
+            {
+              "field_value_factor": {
+                "field": "comment_count",
+                "factor": 2,
+                "modifier": "none",
+                "missing": 0
+              }
+            }
+          ]
+        }},
+        {"function_score": {
+          "query": {
+            "match": {
+              "title": {
+                "query": "Java"
+              }
+            }
+          },
+          "functions": [
+            {
+              "filter": {
+                "term": {
+                  "tags": "database"
+                }
+              },
+              "boost_factor": 5
+            },
+            {
+              "filter": {
+                "term": {
+                  "tags": "mysql"
+                }
+              },  
+              "boost_factor": 3
+            }
+          ],
+          "score_mode": "multiply"
+        }}
+      ]
+    }
+  },
+  "sort": [
+    {
+      "creation_date": {
+        "order": "desc"
+      }
+    }
+  ],
+  "highlight": {
+    "fields": {
+      "title": {}
+    }
+  }
+}
+```
+
+## Suggestions
+
+Suggestions work on an index level
+
+Payloads are held in memory, keep them to _**necessary fields only**_
+
+_**Term, Phrase, Completion, & Context**_: the four kinds of suggestions
+
+### Term Suggestion
+Based on edit distance; text is broken down into tokens
+
+**Term Modes**:
+
+- missing: Only suggests if term is not in index
+- always: Find similar suggestions
+- popular: Suggestions occurring more often than the input term
+
+popular seems to be a good strategy
+
+nGrams could be an interesting option; index size becomes a problem with scale; not easily implemented
+
+### Phrase Suggestion
+words are not separated, the phrase is the token; same as term past that
+
+- real_world_error_liklihood can be increased depending on platform
+
+### Completion Suggestion
+...
+
+### Context Suggestion
+...
+
+### Suggestions Lab
+
+```json
+POST stack/_search
+{
+  "query": {
+    "match": {
+      "title": {
+        "query": "javs sprng framewerk"
+      }
+    }
+  },
+  "suggest": {
+    "mysuggest": {
+      "text": "javs sprng framewerk",
+      "term": {
+        "field": "title",
+        "suggest_mode": "missing",
+        "sort": "score",
+        "size": 3
+      }
+    }
+  }
+}
+
+POST stack/_search?search_type=count
+{
+  "suggest": {
+    "text": "rubi on rais",
+    "simple_phrase": {
+      "phrase": {
+        "field": "title",
+        "size": 3,
+        "max_errors": 2
+      }
+    }
+  }
+}
+```
+
+## Aggregations
+
+
+
