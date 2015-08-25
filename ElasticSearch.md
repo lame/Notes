@@ -813,5 +813,124 @@ POST stack/_search?search_type=count
 
 ## Aggregations
 
+Search for unknown query criteria
+
+Aggregations are the 'next generation' of facets, are put alongside queries in requests. The aggregations should be sent to the backend through a POST filter rather than altering the aggs; allows multiple aggregations on the same field to be made.
+
+**Aggregation Scope**
+
+- **filter_query**: defined in the query part; impacts the main scope
+- **post_filter**: defined _outside_ of the query part; does not impact main scope (i.e. document set)
+
+```json
+  "query" : {
+    "filtered" : {
+      "query" : { "match" : { "name" : "John" }},
+      "filter" : {
+        "range" : { "age" : { "from" : 20, "to" : 50 }}
+      }
+  },
+￼  "aggregations" : {
+    "employer" : {
+      "terms" : {
+        "field" : "company"
+      }
+    }
+  }
+
+```
+
+### Buckets & Metrics
+
+**Buckets**: Aggregations that build buckets. Each bucket is associated with some criteria over documents. During query execution, each document is evaluated against the created buckets and each bucket keeps track of what documents “fall” in it. Each bucket effectively defines a set of documents derived from the document set within the aggregations scope.
+
+- works very well for data such as enum values, date ranges, counts, etc.
+
+**Metrics**: Aggregations that given a set of documents, produce a single/multiple scalar/s. Typically, metrics aggregations generate numeric stats that are computed over a specific document set
+
+### Aggregations
+
+**Sum Agg**: create a sum based on a single field in all results
+
+**Minimum / Maximum Agg**: pull oldest date / newest date, smallest / largest field, etc.
+
+**Stats Agg**: returns min, max, average, sum; works on numbers, dates, geo data
+
+**Extended Agg**: returns stats and sum of squares,variance, standard deviation, and standard deviation bounds; will error on certain field types
+
+**Terms Agg**: will aggregate based on terms field; size and sorting can be specified in the query; we don't know what the terms are - make buckets for all the terms
+
+**Histogram Agg**: created output that would be transferrable to a visual chart in Kabana for instance; invervals can be set in query
+
+**Range Agg**: very similar to histogram, just has self set range buckets as opposed to intervals; bucket names can be overwritten with _key_
+
+**\*_range Agg**: date range, IP range aggregation; IP range aggregation can take advantage on mask to range by subnet for instance
+
+**Date Histogram Agg**: same as histogram, interval understands date related terms such as 'day' or 'month'
+
+**Filters Agg**: buckets can be based upon filters, filter clauses are created by the user. Filters with average aggregation is another approach that allows the _avg_ agg to be implemented; similar to terms, however we know what terms we're searching for
+
+**Missing Agg**: Find documents that don't have information for a field; there is missing data in the document field
+
+**Cardinality Agg**: Aggregates the number of unique values for a defined field
+
+**Significant Terms**: Find the 'uncommonly common' terms. e.g. what terms are significant to 'Java' vs. the entire set of documents. Focused agg of terms based on a query term's results
+
+**Top Hits Agg**: will return a top 10 hit array for each returned bucket; a distributed join
+
+**Percentile Agg**: ...
+
+### Aggregation Filters
+
+**Scripting with Aggs**: ...
+
+**GeoLocation**: distance and bounds from a point
+
+## Document Design
+
+Define questions before the data modeling. Data modeling needs to be created before data uploads. 
+
+Heirarchical inner-objects need to be removed unless you have a 1-to-1 relationship. A 1-to-many relationship will cause problems inside of Lucene storage containers. Lucene stores thisinformation as an unordered array per field.
+
+**Nested Type**: necessary to create proper objects of nested data inside lucene. Nested type can be separated by dot notation; it is not recommended that data have dots in it.
+
+**Parent / Child Type**: will make separate JSON documents for each level. Parent / Child documents must live in the same index and be of different types
+
+```json
+curl -XPOST 'localhost:9200/crunchbase/employee?parent=amazon' -d '{
+    "first_name" : "Jeff",
+    "last_name" : "Bezos"
+￼}'
+```
+
+* Pay close attention to how the parent is explicitly defined so the child document will be stored on the partent's shard, not on whichever shard would hold _id: 1_ after murmur3.
+
+**has_child Query**: ...
+
+- _inner\_hits_ will give responses from the inner query
+
+Nested is more efficient that parent / child, nested uses far less mem in the JVM. Nested has to create new index for any information changes. Parent / Child can cause hotspots in shards
+
+**Parent / Child vs Flattening Data**: ...
+
+### Suggestions
+
+- Add good metadata to docs such as which app version created this data and what datamodel this data was created with
+- Roles and group fields should be added so security measures can be added down the road
+- Do not rely only on document types and index name
+- Use one index per document type
 
 
+## Percolator, Search Reversed
+
+Percolator allows you to search a document for possible queries that will work on it. Percolator creates an index of questions that are searched against with documents for questions that are relevant to aforementioned documents. Percolating is done at the time of indexing the document
+
+_.percolator_ is a type and reserved word, _\_percolator_ will return a matches array
+
+**Filtering**: allows for including and excluding specific queries based on provided metadata; only a subset of queries will be run against new document undergoing percolation
+
+Percolators should not be kept in the same index as data; allows for nodes that only do percolation, spees up. Separating specific percolation nodes can allow these nodes to have specalized hardware to increase speed as well as large heap and uncontested resource pools that would be used from indexing documents
+
+## Client Testing and such
+
+...
