@@ -16,9 +16,9 @@ Data Store
 
 **clusters**: coordinating node will distribute client request to other nodes
 
-**index**: a collection of shards, similar to a table in a db; makes documents searchable; pay price on write, not read
+**index**: a collection of shards, similar to a table in a db; makes documents searchable; pay price on write, not read; "pie" analogy
 
-**shards**: index only references primary shards
+**shards**: index only references primary shards; "slice" analogy
 
 **primary shards**: a piece of the index
 
@@ -934,3 +934,8 @@ Percolators should not be kept in the same index as data; allows for nodes that 
 ## Client Testing and such
 
 ...
+
+## Best Practices
+
+- Always provide the id in url if it is known
+- "lowercase" filter should come first
